@@ -1,0 +1,38 @@
+# Base torrc baked into the Tor MikroTik container image.
+#
+# This file is intentionally minimal. tor.sh generates a runtime override at
+# /var/lib/tor/torrc.runtime from the container's environment variables (ports,
+# VirtualAddrNetwork, exit nodes, etc.) and this file %includes it, so the
+# effective config = these defaults + env-driven values (last line wins).
+#
+# TRANSPARENT-PROXY MODEL (why these options):
+#   TransPort  — accepts plain TCP connections that the router dst-nats here and
+#                sends them through the Tor network. Clients need no proxy config.
+#   DNSPort    — resolves names via Tor. For .onion (and .exit) it returns a
+#                synthetic IP from VirtualAddrNetworkIPv4 (default 10.192.0.0/10).
+#   AutomapHostsOnResolve + AutomapHostsSuffixes — makes the DNSPort hand out
+#                those synthetic IPs for .onion/.exit so TransPort can then carry
+#                the TCP flow to the real hidden service.
+#
+# The router (see yt/bgp-setup/tor-setup) forwards the .onion DNS zone to this
+# DNSPort and routes VirtualAddrNetwork -> this container + dst-nats TCP to
+# TransPort. Without those two data-plane pieces, resolving works but packets
+# to the synthetic IPs go nowhere.
+
+# Run as the unprivileged tor user (Debian packages it as debian-tor).
+User debian-tor
+
+# Keep logs on stdout so `/container` logging=yes surfaces them in RouterOS log.
+Log notice stdout
+
+# We are a CLIENT only. Never act as a relay or exit for others.
+SocksPolicy accept *
+ExitRelay 0
+
+# Reasonable client hardening: don't run any server-side features.
+ClientOnly 1
+
+# Pull in the env-generated runtime settings (ports, virtual net, exit nodes).
+# %include tolerates the file not existing on the very first parse; tor.sh
+# always writes it before launching tor, so in practice it is present.
+%include /var/lib/tor/torrc.runtime
