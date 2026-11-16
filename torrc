@@ -1,0 +1,10 @@
+User debian-tor
+
+Log notice stdout
+
+SocksPolicy accept *
+ExitRelay 0
+
+ClientOnly 1
+
+%include /var/lib/tor/torrc.runtime
